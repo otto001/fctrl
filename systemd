@@ -1,0 +1,9 @@
+[Unit]
+Description=FCtrl, smart fan controlling software
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/linux-utils/fctrl/fctrl.py
+
+[Install]
+WantedBy=multi-user.target
