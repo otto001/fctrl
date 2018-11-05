@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # coding=utf-8
+
 from thermal_manager import ThermalManager
 from cooling_manager import CoolingManager
 
@@ -7,6 +8,7 @@ import json
 from time import sleep
 import os
 import getpass
+from cli import color, print_table
 user_name = getpass.getuser()
 
 
@@ -211,14 +213,18 @@ class FanControl:
     def __init__(self):
         data = self.load()
 
-        self.__thermal_manager = ThermalManager()
-        #self.__thermal_manager.load_thermal_zones()
-
-        cooling_data = None
+        cooling_data, thermal_data = None, None
         if data is not None:
-            cooling_data = data["cooling"]
-
+            cooling_data, thermal_data = data["cooling"], data["thermal"]
+        self.__thermal_manager = ThermalManager(thermal_data)
         self.__cooling_manager = CoolingManager(cooling_data)
+
+        print(color("\n\n====LOAD SUMMARY====", "bold", "header"))
+        print_table(["name", "temp"], [[zone.full_name, str(zone.temp) + "°C"]
+                                       for zone in self.__thermal_manager.thermal_zones])
+        print()
+        print_table(["name", "speed", "rpm"], [[device.full_name, str(device.speed) + "%", str(device.rpm) + "rpm"]
+                                               for device in self.__cooling_manager.cooling_devices])
 
         self.__curves = []
 
@@ -267,6 +273,7 @@ class FanControl:
         data = dict()
         data["curves"] = [curve.get_json() for curve in self.__curves]
         data["cooling"] = self.cooling_manager.get_json()
+        data["thermal"] = self.thermal_manager.get_json()
         data = json.dumps(data)
         with open(self.config_path, "w+") as file:
             file.write(data)
@@ -306,4 +313,5 @@ class FanControl:
 if __name__ == "__main__":
     control = FanControl()
     control.cooling_manager.set_all_to_manual()
+    control.cooling_manager.set_all_safe_speed()
     control.run()

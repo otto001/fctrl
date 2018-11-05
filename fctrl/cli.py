@@ -1,5 +1,6 @@
 # coding=utf-8
 """provides clever cli interface woth custom commands and callbacks"""
+from time import sleep
 
 
 class Colors:
@@ -159,7 +160,6 @@ class CommandBp:
         result = {}
 
         for index in range(1, len(cmd)):
-
             if "=" in cmd[index]:
                 split_arg = cmd[index].split("=", 1)
                 if len(split_arg) == 2:
@@ -174,7 +174,9 @@ class CommandBp:
                     result[flag] = True
 
             else:
-                result[self.arguments[index - 1].name] = cmd[index]
+                for arg in self.arguments[index - 1:]:
+                    if not (arg.flag or arg.optional):
+                        result[arg.name] = cmd[index]
 
         for argument in self.arguments:
 
@@ -229,8 +231,22 @@ class Cli:
             raise
 
 
+def print_table(names, data):
+    if names is not None:
+        data.insert(0, names)
+    for i, d in enumerate(data):
+        line = ''.join(str(x).ljust(30) for x in d)
+        print(line)
+        if i == 0 and names is not None:
+            print('-' * len(line))
+
+
 def printl(*args, **kwargs):
     kwargs["end"] = ""
     kwargs["flush"] = True
     print(*args, **kwargs)
 
+def sleep_print(s):
+    for i in range(0, s):
+        print("#", end="", flush=True)
+        sleep(1)

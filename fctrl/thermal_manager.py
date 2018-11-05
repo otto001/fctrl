@@ -2,24 +2,30 @@
 """thermal interface"""
 import os
 from time import sleep
-from thermal_zone import ThermalZone
+from thermal_zone import ThermalZone, load_thermal_zone
+from cli import print_table
 
 
 class ThermalManager:
     """manages all ThermalZones"""
 
-    def __init__(self):
+    def __init__(self, data):
         self.thermal_zones = []
-        # self.load_thermal_zones()
+        self.load_thermal_zones(data)
 
-    def load_thermal_zones(self):
+    def get_json(self):
+        """return data as dict for json"""
+        data = dict()
+        data["zones"] = [zone.get_json() for zone in self.thermal_zones]
+        return data
+
+    def load_thermal_zones(self, data):
         """load all thermal_zones in self"""
-        directory = "/sys/class/thermal/"
-        all_thermal_devices = os.listdir(directory)
-        thermal_zones = [device[12:] for device in all_thermal_devices if device[:12] == "thermal_zone"]
-        self.thermal_zones = []
-        for i in range(0, len(thermal_zones)):
-            self.thermal_zones.append(ThermalZone(i))
+        if data is None:
+            return False
+        for zone in data["zones"]:
+            self.thermal_zones.append(load_thermal_zone(self, zone))
+
 
     def get_all_temps(self, as_dict=False):
         """returns list of temps of all thermal_zones"""
@@ -33,11 +39,15 @@ class ThermalManager:
         """returns list of names of all thermal_zones"""
         return [zone.get_name() for zone in self.thermal_zones]
 
-    def get_zone(self, index=None, name=None):
+    def get_zone(self, index=None, full_name=None):
         """returns thermal_zone described in query, None if unavailable"""
-        if name is not None:
-            index = [zone for zone in self.thermal_zones if zone.get_name() == name]
-            index = index[0].get_index()
+        if full_name is not None:
+            results = [zone for zone in self.thermal_zones if zone.full_name() == full_name]
+            if len(results) > 0:
+                return results[0]
+            else:
+                return None
+
         if index is not None and index >= 0:
             return self.thermal_zones[index]
         return None

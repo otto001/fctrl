@@ -1,6 +1,7 @@
 import os
 import vendors
 from thermal_zone import ThermalZone
+from cooling_device import CoolingDevice
 
 
 def find_files(root, file_querys, max_depth=3, exclude=[]):
@@ -22,7 +23,8 @@ def find_files(root, file_querys, max_depth=3, exclude=[]):
 
 
 class HwMon:
-    def __init__(self, path):
+    def __init__(self, control, path):
+        self.control = control
         self.path = path
         self.name = ""
         self.vendor = None
@@ -78,14 +80,19 @@ class HwMon:
     def get_thermal_zones(self):
         thermal_zones = self._get_attributes("temp")
         for thermal_zone_data in thermal_zones:
-            thermal_zone = ThermalZone(os.path.join(self.path, thermal_zone_data[1]), hwmon=self)
+            thermal_zone = ThermalZone(self.control.thermal_manager)
+            thermal_zone.from_hwmon(os.path.join(self.path, thermal_zone_data[1]), hwmon=self)
             self.thermal_zones.append(thermal_zone)
 
     def get_cooling_devices(self):
-        self.cooling_devices = self._get_attributes("pwm")
+        cooling_devices = self._get_attributes("pwm")
+        for cooling_device_data in cooling_devices:
+            cooling_device = CoolingDevice(self.control.cooling_manager)
+            cooling_device.from_hwmon(os.path.join(self.path, cooling_device_data[1]), hwmon=self)
+            self.cooling_devices.append(cooling_device)
 
 
-def get_all_hwmons():
+def get_all_hwmons(control):
     """find all thermal zones"""
 
     base = "/sys/class/hwmon"  # base directory for hwmons
@@ -93,7 +100,8 @@ def get_all_hwmons():
     result = []
     for hwmon_path in hwmons:
         path = os.path.join(base, hwmon_path)
-        hwmon = HwMon(path)
+        hwmon = HwMon(control, path)
         result.append(hwmon)
+
     return result
 

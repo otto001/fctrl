@@ -12,27 +12,12 @@ class CoolingManager:
         self.cooling_devices = []
         self.load_all_cooling_devices(data)
 
-    def load_all_cooling_devices(self, data=None):
-        """load all potential cooling devices"""
-        if len(self.cooling_devices) != 0 and data is None:  # return if cooling device already loaded
+    def load_all_cooling_devices(self, data):
+        """load all thermal_zones in self"""
+        if data is None:
             return False
-
-        self.cooling_devices = []  # empty current list
-
-        directory = "/sys/class/hwmon/hwmon2"  # base directory for my specific pc TODO find fans on all pcs!
-        all_devices = os.listdir(directory)  # list all entries in hwmon
-        cooling_devices = set([device[3] for device in all_devices if device[:3] == "pwm"])  # select fans
-
-        for d in cooling_devices:
-            d_data = None
-            if data is not None:  # append meta data if exists
-                for pot_d_data in data["devices"]:
-                    if str(pot_d_data["index"]) == d:
-                        d_data = pot_d_data
-                        break
-            self.cooling_devices.append(CoolingDevice(d, data=d_data))  # create CoolingDevice object
-
-        return True
+        for device in data["devices"]:
+            self.cooling_devices.append(CoolingDevice(self, device))
 
     def set_all_to_manual(self):
         for d in self.cooling_devices:
@@ -53,12 +38,14 @@ class CoolingManager:
 
     def get_device(self, index=None, name=None):
         """returns thermal_zone described in query, None if unavailable"""
-        if name is not None:
-            return [zone for zone in self.cooling_devices if zone.name == name][0]
+        try:
+            if name is not None:
+                return [device for device in self.cooling_devices if device.name == name][0]
 
-        if index is not None and index >= 0:
-            return [zone for zone in self.cooling_devices if zone.index == index][0]
-
+            if index is not None and index >= 0:
+                return [zone for zone in self.cooling_devices if zone.index == index][0]
+        except IndexError:
+            return None
         return None
 
     def get_speed(self, index=None, name=None):
@@ -86,7 +73,7 @@ class CoolingManager:
 
     def set_all_safe_speed(self):
         for device in self.cooling_devices:
-            device.set_speed(40)
+            device.set_speed(32)
 
     def user_detect_speeds(self):
         user = input("Your fans will now be turned on and off repeatedly. Continue? [YES|no]>")

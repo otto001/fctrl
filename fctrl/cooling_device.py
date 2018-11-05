@@ -1,6 +1,7 @@
 from time import sleep
 from file_ops import *
 import cli
+import os
 
 
 def lerp(a, b, alpha):
@@ -8,34 +9,29 @@ def lerp(a, b, alpha):
     return b * alpha + a * (1-alpha)
 
 
-def sleep_print(s):
-    for i in range(0, s):
-        print("#", end="", flush=True)
-        sleep(1)
-
-
 class CoolingDevice:
     """CoolingDevice object"""
-    __base_path = "/sys/class/hwmon/hwmon2/"
 
-    @property
-    def dir(self):
-        """get base directory of thermal_zone files"""
-        return self.get_dir()
-
-    def get_dir(self, fan=False):
+    def get_path(self, fan=False):
         """get base directory of thermal_zone files"""
         if fan:
-            return self.__base_path + "fan" + str(self.__index)
+            return os.path.join(self.__base_dir, "fan" + str(self.__index))
         else:
-            return self.__base_path + "pwm" + str(self.__index)
+            return os.path.join(self.__base_dir, "pwm" + str(self.__index))
 
-    def __init__(self, index, data=None):
-        self.__index = int(index)
-        self.__name = ""
-        self.__threshold_speed = 0
-        self.__rpm_curve = []
-        self.__is_pump = False
+    def __init__(self, mng, data=None):
+        self.mng = mng
+
+        self.__index = -1
+        self.__base_path = ""
+        self.__base_dir = ""
+        self.hwmon = None
+        self.hwmon_name = ""
+
+        self.__name = str(self.__index)
+        self.threshold_speed = 0
+        self.rpm_curve = []
+        self.is_pump = False
 
         self.__threshold_buffer = 0
         self.__threshold_temp = None
@@ -48,6 +44,46 @@ class CoolingDevice:
         if data is not None:
             self.load_json(data)
 
+        # if data is not None:
+        #    self.load_json(data)
+
+    def from_hwmon(self, base_path, hwmon):
+        try:
+            self.__index = int(base_path.split("/")[-1][3:])
+        except ValueError:
+            self.__index = -1
+
+        self.__base_path = base_path
+        self.__base_dir = os.path.dirname(base_path)
+        self.hwmon = hwmon
+        self.hwmon_name = hwmon.name
+        self.__name = str(self.__index)
+
+    def load_json(self, data):
+        self.set_name(data["name"])
+        self.__index = data["index"]
+        try:
+            self.threshold_speed = int(data["threshold-speed"])
+        except (ValueError, TypeError, KeyError):
+            self.threshold_speed = 0
+        try:
+            self.rpm_curve = data["rpm-curve"]
+        except (ValueError, TypeError, KeyError):
+            self.rpm_curve = []
+
+        self.__base_path = data["base-path"]
+        self.__base_dir = os.path.dirname(self.__base_path)
+        self.hwmon_name = data["hwmon"]
+
+        if "is-pump" in data:
+            self.is_pump = data["is-pump"]
+
+    def get_json(self):
+        """return data as dict for json"""
+        return {"name": self.__name, "index": self.__index, "base-path": self.__base_path, "hwmon": self.hwmon_name,
+                "threshold-speed": self.threshold_speed, "rpm-curve": self.rpm_curve,
+                "is-pump": self.is_pump}
+
     @property
     def index(self):
         """returns index of ThermalZone"""
@@ -59,14 +95,21 @@ class CoolingDevice:
         return self.__name
 
     @property
-    def threshold_speed(self):
-        """returns threshold speed"""
-        return self.__threshold_speed
+    def full_name(self):
+        """returns current temparture of thermal zone in °C"""
+        if self.hwmon_name is "":
+            return self.name
+        return self.hwmon_name + "/" + self.name
+
+    # @property
+    # def threshold_speed(self):
+    #     """returns threshold speed"""
+    #     return self.threshold_speed
 
     @property
     def max_speed(self):
         """returns max speed"""
-        return self.__rpm_curve[-1]
+        return self.rpm_curve[-1]
 
     @property
     def started(self):
@@ -77,32 +120,12 @@ class CoolingDevice:
         """sets name"""
         self.__name = name
 
-    def get_json(self):
-        """return data as dict for json"""
-        return {"name": self.__name, "index": self.__index,
-                "threshold-speed": self.__threshold_speed, "rpm-curve": self.__rpm_curve,
-                "is-pump": self.__is_pump}
 
-    def load_json(self, data):
-        self.set_name(data["name"])
-
-        try:
-            self.__threshold_speed = int(data["threshold-speed"])
-        except (ValueError, TypeError, KeyError):
-            self.__threshold_speed = 0
-
-        try:
-            self.__rpm_curve = data["rpm-curve"]
-        except (ValueError, TypeError, KeyError):
-            self.__rpm_curve = []
-
-        if "is-pump" in data:
-            self.__is_pump = data["is-pump"]
 
     @property
     def speed(self):
         """returns current speed in %"""
-        content = read_all(self.get_dir())
+        content = read_all(self.__base_path)
         try:
             speed = int(content)
         except (ValueError, TypeError):
@@ -114,12 +137,12 @@ class CoolingDevice:
         """sets speed"""
         self.__buffer_speed = new_speed
         new_speed = int(round(max(min(new_speed/100*255, 255), 0)))
-        return write(self.get_dir(), new_speed)
+        return write(self.__base_path, new_speed)
 
     @property
     def rpm(self):
         """returns current fan rpm"""
-        data = read_all(self.get_dir(fan=True) + "_input")
+        data = read_all(self.get_path(fan=True)+"_input")
         try:
             return int(data)
         except (TypeError, ValueError):
@@ -130,7 +153,7 @@ class CoolingDevice:
         start = -1
         end = -1
         rpm = self.rpm
-        for i, val in enumerate(self.__rpm_curve):
+        for i, val in enumerate(self.rpm_curve):
 
             if val >= rpm and end == -1:
                 end = (10 * i, val)
@@ -173,144 +196,8 @@ class CoolingDevice:
         return True
 
     def set_to_manual(self):
-        pass
-        write(self.get_dir() + "_enable", "1")
-        write(self.get_dir(), 100)
-
-    def user_detect_speeds(self):
-        old_speed = self.speed
-        success = self._user_detect_speeds(user=True)
-        self.set_speed(old_speed)
-        return success
-
-    def _user_detect_max_speed(self):
-        cli.printl("Ramping up fan to full speed: ")
-        self.set_speed(100)
-        success = self.wait_for_fan_response(response=(lambda d: d.rpm > 0), p=True)
-        if not success:
-            print("ERROR: Device unavailable")
-            return False
-
-        slept = 0
-        last_rpm = self.rpm
-        count = 0
-        while True:
-            sleep_print(1)
-            if self.rpm*0.95 <= last_rpm:
-                count += 1
-                if count >= 3:
-                    break
-            else:
-                count = 0
-            last_rpm = self.rpm
-            slept += 1
-            if slept > 10:
-                break
-
-        print(" OK")
-
-        return True
-
-    def _user_is_pump(self):
-        user_in = input("Is the fan actually a pump? [yes|NO]: ")
-        if user_in in ["yes", "y"]:
-            self.__is_pump = True
-            self.__threshold_speed = 0
-            return True
-        else:
-            self.__is_pump = False
-            return False
-
-    def _user_detect_threshold(self):
-
-        cli.printl("Ramping up fan to full speed: ")
-        self.set_speed(100)
-        success = self.wait_for_fan_response(response=(lambda d: d.rpm > 0), p=True)
-        if not success:
-            print(" ERROR: Device unavailable")
-            return False
-
-        print(" OK")
-
-        cli.printl("Stopping fan: ")
-        self.set_speed(0)
-
-        success = self.wait_for_fan_response(response=(lambda d: d.rpm == 0), p=True)
-        if not success:
-            print(" ERROR: Could not stop fan")
-            self.__threshold_speed = 0
-
-            self._user_is_pump()
-
-        if not self.__is_pump:
-            sleep_print(6)
-            print(" OK")
-
-        data = [self.rpm]
-        threshold_found = False
-
-        cli.printl("Slowly ramping up fan: ")
-        self.set_speed(8)
-
-        while self.speed < 100:
-            cur_speed = self.speed
-            if not threshold_found:
-                cur_speed += 2
-                self.set_speed(cur_speed)
-                sleep_print(3)
-                if self.rpm > 0:
-                    threshold_found = True
-                    self.__threshold_speed = cur_speed + 2
-                    self.set_speed(cur_speed - cur_speed % 10)
-            else:
-                cur_speed += 10
-                self.set_speed(cur_speed)
-                sleep_print(4)
-
-            if cur_speed % 10 == 0:
-                data.append(self.rpm)
-
-        print(" OK")
-        self.__rpm_curve = data
-        print(data)
-        return True
-
-    def _user_check_threshold(self):
-        cli.printl("Checking threshold speed: ")
-
-        self.set_speed(0)
-        success = self.wait_for_fan_response(response=(lambda d: d.rpm == 0), p=True)
-        if not success:
-            print(" ERROR: Could not stop fan")
-            return False
-
-        sleep_print(12)
-
-        self.set_speed(self.__threshold_speed)
-        success = self.wait_for_fan_response(response=(lambda d: d.rpm > 0), p=True)
-        if success:
-            print(" OK")
-        else:
-            print(" ERROR: Could not start fan")
-            return False
-        return True
-
-    def _user_detect_speeds(self, user=True):
-        print("\nDetecting max & threshold speed of device " + self.name + " (" + str(self.index) + ")")
-
-        success = self._user_detect_threshold()
-        if not success:
-            return False
-        elif self.__is_pump:
-            print("Success! Detected: \n\t\tmax-speed: " + str(self.max_speed) + "rpm\n\t\tis pump:    yes")
-            return True
-
-        success = self._user_check_threshold()
-        if not success:
-            return False
-
-        print("Success! Detected: \n\t\tmax-speed: " + str(self.max_speed) + "rpm\n\t\tthreshold: " + str(
-            self.threshold_speed)+"%")
+        write(self.__base_path + "_enable", "1")
+        self.set_speed(40)
 
     def update(self, temp, speed, delta, trend, curve):
         act_speed = self.actual_speed
@@ -327,8 +214,8 @@ class CoolingDevice:
             self.__responsiveness = 10
 
         if self.__threshold_temp is None:
-            self.__threshold_temp = curve.calculate_threshold_temp(self.__threshold_speed)
-            print(self.name, self.__threshold_speed, self.__threshold_temp)
+            self.__threshold_temp = curve.calculate_threshold_temp(self.threshold_speed)
+            print(self.name, self.threshold_speed, self.__threshold_temp)
 
         if self.__threshold_temp + 2 < temp or temp < self.__threshold_temp - 2:
             self.__threshold_buffer += temp - self.__threshold_temp
@@ -346,7 +233,7 @@ class CoolingDevice:
         if not self.__started:
             self.set_speed(0)
         else:
-            speed = max(speed, self.__threshold_speed)
+            speed = max(speed, self.threshold_speed)
 
             own_speed = self.speed
             speed_delta = speed - own_speed
@@ -358,3 +245,18 @@ class CoolingDevice:
             elif abs(speed_delta) > 5:
                 result = own_speed + speed_delta*0.5
             self.set_speed(result)
+
+    def test_exists(self):
+        self.set_to_manual()
+
+        self.set_speed(0)
+        sleep(3)
+        rpm_1 = self.rpm
+
+        self.set_speed(100)
+        sleep(5)
+        rpm_2 = self.rpm
+
+        self.set_speed(40)
+        return rpm_2 > rpm_1 * 1.1 and rpm_2 != 0
+

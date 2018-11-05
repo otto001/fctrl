@@ -4,9 +4,10 @@
 from fctrl import FanControl
 from cli import Cli, color
 import detection_dialog
+import os
 
 control = FanControl()
-select = None
+selected = None
 
 
 def print_all():
@@ -30,9 +31,7 @@ def new_curve(args):
     if 0 < len(args.name) < 32:
         control.new_curve(args.name)
         print("New curve created: " + args.name)
-        #print_all()
-        #print()
-        select_curve(args)
+        select(args)
         print("You can now add thermal zones")
     else:
         print("Invalid name: invalid length")
@@ -43,13 +42,22 @@ def del_curve(args):
     print_all()
 
 
-def select_curve(args):
-    new = control.get_curve(args.name)
-    if new is not None:
-        global select
-        select = new
-        cmd.context = "curves/" + select.name
-        print("Selected curve: " + select.name)
+def select(args):
+    global selected
+
+    if args.cooling:
+        new = control.cooling_manager.get_device(name=args.name)
+        if new is not None:
+            selected = new
+            cmd.context = "cooling/" + selected.name
+            print("Selected cooling device: " + selected.name)
+
+    if False:
+        new = control.get_curve(args.name)
+        if new is not None:
+            selected = new
+            cmd.context = "curves/" + selected.name
+            print("Selected curve: " + selected.name)
 
 
 def list_what(args):
@@ -66,8 +74,8 @@ def list_what(args):
 
 
 def info(args):
-    if select is None:
-        print("Error: No curve selected! Use § select <name>")
+    if selected is None:
+        print("Error: No curve selected! Use § selected <name>")
         return
 
     if args.graph:
@@ -82,7 +90,7 @@ def info(args):
             rows = terminal_size[1]-2
         val_per_row = 100/rows
         for i in range(0, steps):
-            vals.append(int(round(select.get_speed(i * step_size) / val_per_row)))
+            vals.append(int(round(selected.get_speed(i * step_size) / val_per_row)))
 
         for row in range(0, rows):
             content = ""
@@ -101,7 +109,7 @@ def info(args):
 
     else:
         if args.steps is None:
-            for value in select.get_values():
+            for value in selected.get_values():
                 print(value.pretty_print())
         else:
             if args.steps <= 1:
@@ -109,36 +117,36 @@ def info(args):
             else:
                 for i in range(0, args.steps):
                     val = i*(100/(args.steps-1))
-                    print(str(int(round(val))) + "°C -> " + str(select.get_speed(val)) + "%")
+                    print(str(int(round(val))) + "°C -> " + str(selected.get_speed(val)) + "%")
 
-        if select.thermal_zone is None:
+        if selected.thermal_zone is None:
             print("Thermal zone: not set")
         else:
-            print("Thermal zone: " + select.thermal_zone.name + " (" + str(select.thermal_zone.index) + ")")
+            print("Thermal zone: " + selected.thermal_zone.name + " (" + str(selected.thermal_zone.index) + ")")
 
-        print("Cooling devices: " + ", ".join([d.name for d in select.cooling_devices]))
+        print("Cooling devices: " + ", ".join([d.name for d in selected.cooling_devices]))
 
 
 def set(args):
-    if select is None:
-        print("Error: No curve selected! Use § select <name>")
+    if selected is None:
+        print("Error: No curve selected! Use § selected <name>")
         return
 
     if args.temp is not None and args.speed is not None:
         if 0 <= args.temp <= 100 and 0 <= args.speed <= 100:
-            select.insert_point(args.temp, args.speed)
+            selected.insert_point(args.temp, args.speed)
 
     if args.zone is not None:
         zone = control.thermal_manager.get_zone(index=args.zone)
-        select.set_thermal_zone(zone)
+        selected.set_thermal_zone(zone)
 
 
 def device(args):
     if args.add is not None:
-        if select is None and False:
-            print("Error: No curve selected! Use § select <name>")
+        if selected is None and False:
+            print("Error: No curve selected! Use § selected <name>")
             return
-        select.add_cooling_device(args.add)
+        selected.add_cooling_device(args.add)
 
 
 def save(args):
@@ -147,7 +155,8 @@ def save(args):
 
 
 def detect(args):
-    detection_dialog.detect()
+    global control
+    detection_dialog.detect(control)
     #if args.cooling:
     #    control.cooling_manager.load_all_cooling_devices()
 
@@ -158,10 +167,10 @@ def detect(args):
 
 
 def show_help(args):
-    global select
-    if select is not None:
-        print("You are currently editing the curve \"" + select.name + "\".\n" +
-              "To change your selection, type " + color("$ select <curve>", "bold") + "\n" +
+    global selected
+    if selected is not None:
+        print("You are currently editing the curve \"" + selected.name + "\".\n" +
+              "To change your selection, type " + color("$ selected <curve>", "bold") + "\n" +
               "To list all fan curves, type " + color("$ list curves", "bold") + "\n" +
               "To set the thermal zone of the curve, type " + color("$ set zone <zone>", "bold") + "\n" +
               "To list all thermal zones, type " + color("$ list zones", "bold") + "\n" +
@@ -173,7 +182,7 @@ cmd.location = "fctrl"
 cmd.context = "menu"
 cmd.add_command("new", new_curve, "name")
 cmd.add_command("del", del_curve, "name")
-cmd.add_command("select sl", select_curve, "name")
+cmd.add_command("select sl", select, "-cooling|c -thermal|t name")
 cmd.add_command("list", list_what, "what")
 
 cmd.add_command("set", set, "[temp|t|-t:int] [speed|s|-s:int] [zone|z|-z:int]")
@@ -190,6 +199,11 @@ cmd.add_command("detect", detect, "-cooling|c -threshold|thresh|max-speed|speeds
 
 
 if __name__ == "__main__":
-    while True:
-        cmd.get_input()
+    os.system("sudo systemctl stop fctrl.service")
+    try:
+        while True:
+            cmd.get_input()
+    except:
+        os.system("sudo systemctl start fctrl.service")
+        raise
 
