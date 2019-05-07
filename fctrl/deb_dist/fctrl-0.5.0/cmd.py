@@ -89,12 +89,41 @@ def set_idle_temp(zone, idletemp, desiredtemp, criticaltemp, add_thermal_zone, r
     control.save()
 
 
+@cli.command("add")
+@click.argument("zone")
+@click.option("--idletemp", "-it", is_flag=True, help="Set the idle temp for specified zone")
+def set_idle_temp(zone, idletemp, desiredtemp, criticaltemp, value):
+    try:
+        value = int(value)
+    except ValueError:
+        value = None
+    if not value:
+        print("No value provided!")
+        return
+
+    if sum((criticaltemp, idletemp, desiredtemp)) == 1:
+        zone = control.thermal_manager.get_zone(full_name=zone)
+        temp_name = None
+        if idletemp:
+            zone.idle = value
+            temp_name = "idle"
+        elif desiredtemp:
+            zone.idle = value
+            temp_name = "desired"
+        elif criticaltemp:
+            zone.critical = value
+            temp_name = "critical"
+        if temp_name:
+            print("Set {} temperature of zone {} to {} °C.".format(temp_name, zone.name, value))
+        control.save()
+
+
 @cli.command("detect")
 def detect():
     global control
-    if detection_dialog.detect(control):
-        control.save()
-        print("Saved succesfully")
+    detection_dialog.detect(control)
+    control.save()
+    print("Saved succesfully")
 
 
 if __name__ == "__main__":

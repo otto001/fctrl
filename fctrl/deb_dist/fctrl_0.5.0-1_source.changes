@@ -1,0 +1,31 @@
+Format: 1.8
+Date: Tue, 16 Apr 2019 13:58:01 +0200
+Source: fctrl
+Binary: python3-fctrl
+Architecture: source
+Version: 0.5.0-1
+Distribution: unstable
+Urgency: low
+Maintainer: Matteo Ludwig <matteo.ludwig@gmail.com>
+Changed-By: Matteo Ludwig <matteo.ludwig@gmail.com>
+Description:
+ python3-fctrl - A cool fan control system von debian based systems (and poss
+Changes:
+ fctrl (0.5.0-1) unstable; urgency=low
+ .
+   * source package automatically created by stdeb 0.8.5
+Checksums-Sha1:
+ 02cda4b2b3ca22547dfa8620e2f4d68fbefab361 802 fctrl_0.5.0-1.dsc
+ 45746d2e02651e18c2c3b173a3fb81d6c6618220 12064 fctrl_0.5.0.orig.tar.gz
+ f247369d483283587d005fc2c58d554891dbf8a2 912 fctrl_0.5.0-1.debian.tar.xz
+ a4ac7672dd35bdb025adb4042dd44ff9f10c8e1d 5123 fctrl_0.5.0-1_source.buildinfo
+Checksums-Sha256:
+ 9076be3f4c7485e75d0fefecd39a37bab85e33192870fec2f64c1545d0a15449 802 fctrl_0.5.0-1.dsc
+ bfcbf7b71995487f57ae27b04544b946253e87f421cbad6386c0d95ee83a6602 12064 fctrl_0.5.0.orig.tar.gz
+ 88d2de4655fabf9f52d73a8caa2d335af45489bcfc7e871bcfd6eb3d1f423902 912 fctrl_0.5.0-1.debian.tar.xz
+ 3a6ed3912d27d65ecd92d54a349c1190d219258103f673883b06695ed544f275 5123 fctrl_0.5.0-1_source.buildinfo
+Files:
+ db2e8dfdc11899be51ad0b0d9679fe4d 802 python optional fctrl_0.5.0-1.dsc
+ cacc7d9a6eb975c8cf17a7d564652199 12064 python optional fctrl_0.5.0.orig.tar.gz
+ 9b484e3645b7abd8485ff19376d22e1a 912 python optional fctrl_0.5.0-1.debian.tar.xz
+ 93972e8ab2eeb19a5126e52fe466121f 5123 python optional fctrl_0.5.0-1_source.buildinfo

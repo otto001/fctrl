@@ -7,7 +7,6 @@ from cooling_manager import CoolingManager
 import json
 from time import sleep
 import os
-from contextlib import suppress
 
 record = False
 test_clf = True
@@ -69,12 +68,7 @@ class FanControl:
         data["cooling"] = self.cooling_manager.get_json()
         data["thermal"] = self.thermal_manager.get_json()
         data = json.dumps(data)
-
-        with open(".config-backup", "w+") as file:
-            file.write(data)
-
-        with suppress(FileExistsError):
-            os.makedirs(os.path.dirname(self.config_path))
+        os.makedirs(os.path.basename(self.config_path))
         with open(self.config_path, "w+") as file:
             file.write(data)
 

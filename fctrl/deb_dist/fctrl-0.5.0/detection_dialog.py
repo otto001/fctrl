@@ -271,7 +271,6 @@ def detect(control):
         return False
     control.thermal_manager.thermal_zones = thermal_zones
     control.cooling_manager.cooling_devices = cooling_devices
-    return True
 
 
 

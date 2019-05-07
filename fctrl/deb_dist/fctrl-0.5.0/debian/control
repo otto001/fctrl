@@ -1,0 +1,17 @@
+Source: fctrl
+Maintainer: Matteo Ludwig <matteo.ludwig@gmail.com>
+Section: python
+Priority: optional
+Build-Depends: python3-setuptools, python3-all, debhelper (>= 7)
+Standards-Version: 3.9.1
+
+
+
+
+
+Package: python3-fctrl
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}
+Description: A cool fan control system von debian based systems (and poss
+
+
